@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+
+@layer base {
+  body {
+    @apply bg-[#f3f4f9] text-[#1e293b];
+  }
+}
+
+/* Custom shadow for that Neumorphic feel */
+.neumorphic-card {
+  background: white;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 20px 20px 60px #e6e7ed, -20px -20px 60px #ffffff;
+}
