@@ -1,82 +1,148 @@
-// src/pages/Overview.jsx
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebaseConfig';
-import { collection, query, onSnapshot } from 'firebase/firestore';
-import { motion } from 'framer-motion';
-import { Zap, ShieldCheck, TrendingUp, ArrowUpRight } from 'lucide-react';
+import { db, auth } from '../firebaseConfig';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { Zap, ShieldCheck, TrendingUp } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function Overview({ userName }) {
-    const [stats, setStats] = useState({
-        total: 0,
-        verified: 0,
-        minted: 0,
-        rate: 0
-    });
+    const adminEmail = "devshubh1208@gmail.com";
 
+    const [stats, setStats] = useState({ total: 0, verified: 0, onChain: 0, score: 0 });
+    const [loading, setLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [greeting, setGreeting] = useState("Good Morning"); // Default
+
+    // 1. Calculate Greeting based on IST
     useEffect(() => {
-        const q = query(collection(db, "skills"));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const docs = snapshot.docs.map(doc => doc.data());
-            const total = docs.length;
-            const verified = docs.filter(s => s.status === 'Verified').length;
-            const minted = docs.filter(s => s.status === 'Minted').length;
+        const getGreeting = () => {
+            // Get current hour in IST (Indian Standard Time)
+            const hour = parseInt(new Date().toLocaleTimeString("en-US", {
+                timeZone: "Asia/Kolkata",
+                hour12: false,
+                hour: "numeric"
+            }));
 
-            // Calculate real rate (Verified / Total) or 0 if no skills
-            const rate = total > 0 ? ((verified / total) * 100).toFixed(1) : 0;
-
-            setStats({ total, verified, minted, rate });
-        });
-        return () => unsubscribe();
+            if (hour >= 5 && hour < 12) return "Good Morning";
+            if (hour >= 12 && hour < 17) return "Good Afternoon";
+            return "Good Evening";
+        };
+        setGreeting(getGreeting());
     }, []);
 
+    useEffect(() => {
+        const unsubAuth = onAuthStateChanged(auth, (user) => {
+            setCurrentUser(user);
+        });
+        return () => unsubAuth();
+    }, []);
+
+    useEffect(() => {
+        if (!currentUser) return;
+
+        let q;
+        const isAdmin = currentUser.email === adminEmail;
+
+        if (isAdmin) {
+            q = query(collection(db, "skills"));
+        } else {
+            q = query(collection(db, "skills"), where("userId", "==", currentUser.uid));
+        }
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const docs = snapshot.docs.map(doc => doc.data());
+
+            const total = docs.length;
+            const verified = docs.filter(d => d.status === 'Verified').length;
+            const onChain = docs.filter(d => d.blockchainHash).length;
+            const score = total > 0 ? Math.round((verified / total) * 100) : 0;
+
+            setStats({ total, verified, onChain, score });
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [currentUser]);
+
+    if (loading) return <div className="p-10 text-slate-400 font-bold animate-pulse">Loading Dashboard...</div>;
+
     return (
-        <div className="p-2 space-y-8 animate-in fade-in duration-1000">
-            <h1 className="text-4xl font-black text-slate-900 tracking-tighter capitalize">
-                Good morning, {userName}!
-            </h1>
+        <div className="space-y-8 animate-in fade-in duration-700">
 
-            <div className="grid grid-cols-12 gap-8">
-                <div className="col-span-12 lg:col-span-9 grid grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard label="Total Skills" value={stats.total} icon={<Zap className="text-indigo-500" />} />
-                    <StatCard label="Verified" value={stats.verified} icon={<ShieldCheck className="text-emerald-500" />} />
-                    <StatCard label="On-Chain" value={stats.minted} icon={<Zap className="text-purple-500" />} />
-                    <StatCard label="Score" value={`${stats.rate}%`} icon={<TrendingUp className="text-amber-500" />} />
+            {/* HEADER WITH DYNAMIC GREETING */}
+            <div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">
+                    {greeting}, {userName || "Developer"}!
+                </h1>
+                <p className="text-slate-500 font-medium mt-1">
+                    {currentUser?.email === adminEmail ? "System Overview & Global Stats" : "Here is your skill verification progress."}
+                </p>
+            </div>
 
-                    <div className="col-span-4 bg-white rounded-[3rem] p-10 shadow-[0_20px_60px_rgba(0,0,0,0.03)] border border-white/50 relative overflow-hidden">
-                        <h3 className="font-bold text-xl mb-10">Skill Growth Progress</h3>
-                        <div className="h-60 flex items-end justify-between gap-6 px-4">
-                            {[40, 70, 45, stats.rate > 0 ? stats.rate : 20, 65, 85, 30].map((h, i) => (
-                                <motion.div
-                                    initial={{ height: 0 }} animate={{ height: `${h}%` }}
-                                    key={i} className={`flex-1 rounded-2xl ${i === 3 ? 'bg-indigo-600 shadow-xl shadow-indigo-200' : 'bg-indigo-50 hover:bg-indigo-100 transition-colors'}`}
-                                />
-                            ))}
-                        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40">
+                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                        <Zap size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-4xl font-black text-slate-900">{stats.total}</h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Total Skills</p>
                     </div>
                 </div>
 
-                <div className="col-span-12 lg:col-span-3 space-y-8">
-                    <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-[3rem] p-8 text-white shadow-2xl shadow-indigo-500/20">
-                        <h4 className="font-bold mb-2 text-indigo-100">Success Rate</h4>
-                        <div className="text-5xl font-black mb-4 tracking-tighter">{stats.rate}%</div>
-                        <p className="text-indigo-100 text-sm mb-6">
-                            {stats.total > 0 ? `You have successfully verified ${stats.verified} projects.` : "Add your first project to see your success rate!"}
-                        </p>
-                        <button className="w-full bg-white text-indigo-600 font-black py-4 rounded-2xl hover:scale-[1.03] transition-transform shadow-lg">View Status</button>
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40">
+                    <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                        <ShieldCheck size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-4xl font-black text-slate-900">{stats.verified}</h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Verified</p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40">
+                    <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
+                        <Zap size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-4xl font-black text-slate-900">{stats.onChain}</h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">On-Chain</p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between h-40">
+                    <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+                        <TrendingUp size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-4xl font-black text-slate-900">{stats.score}%</h3>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Score</p>
                     </div>
                 </div>
             </div>
-        </div>
-    );
-}
 
-function StatCard({ label, value, icon }) {
-    return (
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-[0_10px_40px_rgba(0,0,0,0.02)] border border-white flex flex-col items-start gap-4 hover:-translate-y-1 transition-all duration-300">
-            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">{icon}</div>
-            <div>
-                <div className="text-3xl font-black text-slate-900 tracking-tighter mb-1">{value}</div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 min-h-[300px]">
+                    <h3 className="text-lg font-black text-slate-800">Skill Growth Progress</h3>
+                    <div className="mt-10 flex items-end justify-between h-40 gap-4 opacity-50">
+                        {[40, 60, 30, 80, 50, 90, 20].map((h, i) => (
+                            <div key={i} className="w-full bg-indigo-50 rounded-t-xl hover:bg-indigo-600 transition-colors" style={{ height: `${h}%` }}></div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 rounded-[2.5rem] text-white shadow-xl shadow-indigo-200 flex flex-col justify-center">
+                    <p className="text-indigo-200 font-bold text-sm">Success Rate</p>
+                    <h2 className="text-6xl font-black mt-2 tracking-tighter">{stats.score}%</h2>
+                    <p className="text-indigo-100 mt-4 text-sm font-medium">
+                        You have successfully verified {stats.verified} projects.
+                    </p>
+                    <button className="mt-8 bg-white text-indigo-700 py-3 rounded-2xl font-black shadow-lg hover:scale-105 transition-transform">
+                        View Status
+                    </button>
+                </div>
+
             </div>
         </div>
     );
