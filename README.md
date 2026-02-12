@@ -133,7 +133,5 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-### **Contact**
-* **Developer:** [Your Name]
-* **Email:** [Your Email]
-* **Project Link:** [https://github.com/yourusername/provendev](https://github.com/yourusername/provendev)
+project demo link - 
+https://proven-dev.vercel.app/
